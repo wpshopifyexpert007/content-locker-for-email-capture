@@ -4,13 +4,13 @@
  * Plugin URI:        https://wpshopifyexpert.com/plugins/content-locker-for-email-capture
  * Description:       A plugin for content locking and email capture.
  * Version:           1.0.0
- * Requires at least: 5.2
+ * Requires at least: 6.2
  * Requires PHP:      7.2
  * Author:            WP Shopify Expert
  * Author URI:        https://wpshopifyexpert.com/
  * License:           GPL v2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain:       simple-pdf-embedder
+ * Text Domain:       content-locker-for-email-capture
  * Domain Path:       /languages
  */
 
@@ -18,6 +18,11 @@
 if (!defined('ABSPATH')) {
     exit;
 }
+
+// initial setup
+define('CLEC_DIR', plugin_dir_path(__FILE__));
+define('CLEC_URL', plugin_dir_url(__FILE__));
+define('CLEC_VERSION', '1.0.0');
 
 // Create database table on plugin activation
 function clec_create_table() {
@@ -44,6 +49,8 @@ function clec_content_locker($atts, $content = null) {
     if (isset($_COOKIE['clec_email_verified'])) {
         return do_shortcode($content);
     }
+    wp_enqueue_style('clec-styles');
+    wp_enqueue_script('clec-script');
     
     $output = '<div class="content-locker-wrapper">';
     $output .= '<div class="locked-content" style="display:none;">' . do_shortcode($content) . '</div>';
@@ -63,8 +70,8 @@ add_shortcode('content_lock', 'clec_content_locker');
 
 // Add necessary scripts and styles
 function clec_enqueue_scripts() {
-    wp_enqueue_style('clec-styles', plugins_url('css/style.css', __FILE__));
-    wp_enqueue_script('clec-script', plugins_url('js/script.js', __FILE__), array('jquery'), '1.0.0', true);
+    wp_register_style('clec-styles', plugins_url('css/style.css', __FILE__),[],CLEC_VERSION, 'all' );
+    wp_register_script('clec-script', plugins_url('js/script.js', __FILE__), array('jquery'), CLEC_VERSION, true);
     wp_localize_script('clec-script', 'clec_ajax', array(
         'ajax_url' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('clec_nonce')
@@ -76,7 +83,7 @@ add_action('wp_enqueue_scripts', 'clec_enqueue_scripts');
 function clec_handle_email_submission() {
     check_ajax_referer('clec_nonce', 'nonce');
     
-    $email = sanitize_email($_POST['email']);
+    $email = sanitize_email(isset($_POST['email']) ? wp_unslash($_POST['email']) : '');
     
     if (!is_email($email)) {
         wp_send_json_error('Invalid email address');
@@ -120,7 +127,7 @@ function clec_handle_email_submission() {
         
         // Log Mailchimp errors if any
         if (is_wp_error($response)) {
-            error_log('Mailchimp API Error: ' . $response->get_error_message());
+            wp_send_json_error('Mailchimp API Error: ' . $response->get_error_message());
         }
     }
     
@@ -143,73 +150,30 @@ function clec_admin_menu() {
         'dashicons-lock'
     );
 
-    // Add submenu for email marketing settings
-    add_submenu_page(
-        'content-locker',
-        'Email Marketing Settings',
-        'Email Marketing',
-        'manage_options',
-        'content-locker-settings',
-        'clec_settings_page'
-    );
+   
 }
 add_action('admin_menu', 'clec_admin_menu');
 
-// Register settings
-function clec_register_settings() {
-    register_setting('clec_settings', 'clec_mailchimp_api_key');
-    register_setting('clec_settings', 'clec_mailchimp_list_id');
-    register_setting('clec_settings', 'clec_enable_mailchimp');
-}
-add_action('admin_init', 'clec_register_settings');
+function clec_get_emails() {
+    $cached_emails = wp_cache_get('clec_emails');
+    if ($cached_emails) {
+        return $cached_emails;
+    }
 
-// Settings page content
-function clec_settings_page() {
-    ?>
-    <div class="wrap">
-        <h1>Email Marketing Settings</h1>
-        <form method="post" action="options.php">
-            <?php
-            settings_fields('clec_settings');
-            do_settings_sections('clec_settings');
-            ?>
-            <table class="form-table">
-                <tr>
-                    <th scope="row">Enable Mailchimp Integration</th>
-                    <td>
-                        <label>
-                            <input type="checkbox" name="clec_enable_mailchimp" value="1" <?php checked(get_option('clec_enable_mailchimp'), 1); ?>>
-                            Enable Mailchimp
-                        </label>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row">Mailchimp API Key</th>
-                    <td>
-                        <input type="text" name="clec_mailchimp_api_key" value="<?php echo esc_attr(get_option('clec_mailchimp_api_key')); ?>" class="regular-text">
-                        <p class="description">Enter your Mailchimp API key. You can find it in your Mailchimp account under Account → Extras → API keys.</p>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row">Mailchimp List ID</th>
-                    <td>
-                        <input type="text" name="clec_mailchimp_list_id" value="<?php echo esc_attr(get_option('clec_mailchimp_list_id')); ?>" class="regular-text">
-                        <p class="description">Enter your Mailchimp List/Audience ID. You can find it in Mailchimp under Audience → Settings → Audience name and defaults.</p>
-                    </td>
-                </tr>
-            </table>
-            <?php submit_button(); ?>
-        </form>
-    </div>
-    <?php
+    global $wpdb;
+    $table_name = $wpdb->prefix. 'content_locker_emails';
+    $emails = $wpdb->get_results($wpdb->prepare("SELECT * FROM %i ORDER BY created_at DESC", $table_name)); // db call ok;
+
+    wp_cache_set('clec_emails', $emails, 300);
+
+    return $emails;
 }
+
+
 
 // Admin page content
 function clec_admin_page() {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'content_locker_emails';
-    $emails = $wpdb->get_results("SELECT * FROM $table_name ORDER BY created_at DESC");
-    
+    $emails = clec_get_emails();
     ?>
     <div class="wrap">
         <h1>Content Locker Email List</h1>
