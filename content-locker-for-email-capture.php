@@ -66,7 +66,7 @@ function clec_content_locker($atts, $content = null) {
     
     return $output;
 }
-add_shortcode('content_lock', 'clec_content_locker');
+add_shortcode('clec_content_lock', 'clec_content_locker');
 
 // Add necessary scripts and styles
 function clec_enqueue_scripts() {
@@ -99,37 +99,6 @@ function clec_handle_email_submission() {
         array('%s')
     );
 
-    // Mailchimp Integration
-    if (get_option('clec_enable_mailchimp') && get_option('clec_mailchimp_api_key') && get_option('clec_mailchimp_list_id')) {
-        $api_key = get_option('clec_mailchimp_api_key');
-        $list_id = get_option('clec_mailchimp_list_id');
-        
-        // Get datacenter from API key
-        $dc = substr($api_key, strpos($api_key, '-') + 1);
-        
-        // API endpoint
-        $url = "https://{$dc}.api.mailchimp.com/3.0/lists/{$list_id}/members";
-        
-        // Prepare data
-        $data = json_encode([
-            'email_address' => $email,
-            'status' => 'subscribed'
-        ]);
-        
-        // Make API request
-        $response = wp_remote_post($url, [
-            'headers' => [
-                'Authorization' => 'Basic ' . base64_encode('user:' . $api_key),
-                'Content-Type' => 'application/json'
-            ],
-            'body' => $data
-        ]);
-        
-        // Log Mailchimp errors if any
-        if (is_wp_error($response)) {
-            wp_send_json_error('Mailchimp API Error: ' . $response->get_error_message());
-        }
-    }
     
     // Set cookie for 30 days
     setcookie('clec_email_verified', '1', time() + (30 * DAY_IN_SECONDS), '/');
@@ -179,7 +148,7 @@ function clec_admin_page() {
         <h1>Content Locker Email List</h1>
         <div class="clec-admin-content">
             <h2>How to Use</h2>
-            <p>Use the shortcode [content_lock]Your content here[/content_lock] to lock any content.</p>
+            <p>Use the shortcode [clec_content_lock]Your content here[/clec_content_lock] to lock any content.</p>
             
             <h2>Collected Emails</h2>
             <table class="wp-list-table widefat fixed striped">

@@ -25,7 +25,7 @@ Features:
 == Shortcode Usage ==
 
 Basic Usage:
-[content_lock]Your premium content here[/content_lock]
+[clec_content_lock]Your premium content here[/clec_content_lock]
 
 == Installation ==
 
@@ -37,7 +37,7 @@ Basic Usage:
 == Frequently Asked Questions ==
 
 = How do I lock content? =
-Use the shortcode [content_lock]Your premium content here[/content_lock]
+Use the shortcode [clec_content_lock]Your premium content here[/clec_content_lock]
 
 = Which email services are supported? =
 We support Mailchimp, ConvertKit, ActiveCampaign, and more.
